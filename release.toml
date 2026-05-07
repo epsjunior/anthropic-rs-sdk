@@ -1,0 +1,19 @@
+# cargo-release configuration. See https://github.com/crate-ci/cargo-release.
+# release.yml runs `cargo release <bump> --execute --no-confirm` and then
+# pushes the commit + tag atomically itself, so push is disabled here.
+
+allow-branch = ["main"]
+sign-commit = false
+sign-tag = false
+push = false
+# Publish is intentionally disabled here so release.yml runs `cargo publish`
+# explicitly *after* the atomic git push of commit + tag. That ordering keeps
+# the pipeline recoverable: a failed push leaves crates.io untouched (the
+# version is still available); a failed publish leaves the git tag in place
+# and can be retried manually. cargo-release's default order would publish
+# before pushing, which strands crates.io ahead of git on push failure.
+publish = false
+tag-name = "v{{version}}"
+tag-message = "v{{version}}"
+pre-release-commit-message = "chore(release): v{{version}}"
+consolidate-commits = true
