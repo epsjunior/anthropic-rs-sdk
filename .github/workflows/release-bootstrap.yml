@@ -85,22 +85,25 @@ jobs:
         if: ${{ hashFiles('deny.toml') != '' }}
         run: cargo deny check
 
-      - name: cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked
-
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # Tag and push first so the git state is durable before crates.io is
+      # touched. If `cargo publish` fails after this, the tag is already in
+      # place and the publish can be retried manually.
       - name: Create and push tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           git tag -a "v${VERSION}" -m "v${VERSION}"
           git push origin "v${VERSION}"
+
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
 
       - name: Create GitHub Release
         env:

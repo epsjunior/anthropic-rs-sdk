@@ -98,19 +98,34 @@ jobs:
           echo "type=$BUMP" >> "$GITHUB_OUTPUT"
           echo "Bump type: $BUMP (range: $RANGE)"
 
-      - name: cargo release
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # cargo-release bumps Cargo.toml + Cargo.lock, commits as
+      # `chore(release): vX.Y.Z`, and creates the tag locally. Publish is
+      # disabled in release.toml so crates.io is only touched after the
+      # atomic push below succeeds.
+      - name: cargo release (bump + commit + tag)
         run: cargo release "${{ steps.bump.outputs.type }}" --execute --no-confirm
 
       - name: Push commit and tag
         run: git push --atomic --follow-tags origin main
+
+      # Only after the git state is durable on origin do we publish to
+      # crates.io. A failed publish here leaves the tag in place and is
+      # retryable; the alternative ordering would strand crates.io ahead of
+      # git if the push failed.
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
 
       - name: Read new crate version
         id: version
         run: |
           VERSION=$(cargo metadata --format-version 1 --no-deps \
             | jq -r '.packages[] | select(.name=="anthropic-rs-sdk") | .version')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::Failed to read crate version after release"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
