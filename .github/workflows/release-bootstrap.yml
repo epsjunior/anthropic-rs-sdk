@@ -31,11 +31,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard — no tag may exist
+      - name: Guard — no version tag may exist
         run: |
-          if [ -n "$(git tag --list)" ]; then
-            echo "::error::Tags already exist. release-bootstrap.yml is single-use; use release.yml for subsequent releases."
-            git tag --list
+          if [ -n "$(git tag --list 'v*')" ]; then
+            echo "::error::Version tags already exist. release-bootstrap.yml is single-use; use release.yml for subsequent releases."
+            git tag --list 'v*'
             exit 1
           fi
 

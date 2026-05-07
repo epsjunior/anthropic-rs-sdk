@@ -81,7 +81,7 @@ jobs:
         id: bump
         run: |
           set -euo pipefail
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          LAST_TAG=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || true)
           if [ -z "$LAST_TAG" ]; then
             echo "::error::No prior tag exists. Run release-bootstrap.yml once before relying on auto-release."
             exit 1
