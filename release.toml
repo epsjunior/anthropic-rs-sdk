@@ -1,0 +1,13 @@
+# cargo-release configuration. See https://github.com/crate-ci/cargo-release.
+# release.yml runs `cargo release <bump> --execute --no-confirm` and then
+# pushes the commit + tag atomically itself, so push is disabled here.
+
+allow-branch = ["main"]
+sign-commit = false
+sign-tag = false
+push = false
+publish = true
+tag-name = "v{{version}}"
+tag-message = "v{{version}}"
+pre-release-commit-message = "chore(release): v{{version}}"
+consolidate-commits = true

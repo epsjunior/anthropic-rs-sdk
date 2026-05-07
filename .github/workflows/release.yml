@@ -1,0 +1,118 @@
+name: release
+
+# Automatic release on every merge to main. Picks patch vs minor by scanning
+# Conventional Commits since the last tag. Major bumps are off-policy until
+# v1.0 — change the bump-detection step if that policy changes.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  ANTHROPIC_API_KEY: ""
+
+jobs:
+  release:
+    name: cut release
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 30
+    # Skip the workflow's own release commit so it doesn't trigger itself.
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          # Default GITHUB_TOKEN works as long as `github-actions[bot]` is on
+          # the ruleset bypass list. If a PAT is used instead, swap it in here.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "Edinaldo Junior"
+          git config user.email "epsjunior@icloud.com"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-release,cargo-audit,cargo-deny
+
+      # Belt-and-suspenders gate on the actual merge commit. PR CI already ran
+      # the full feature matrix; here we run a single representative combo.
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --features 'rustls-tls,streaming,tools,bedrock,vertex' -- -D warnings
+
+      - name: cargo test
+        run: cargo test --locked --no-default-features --features rustls-tls,streaming,tools,bedrock,vertex
+
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --features 'rustls-tls,streaming,tools,bedrock,vertex'
+
+      - name: cargo audit
+        run: cargo audit
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: Determine bump type from Conventional Commits
+        id: bump
+        run: |
+          set -euo pipefail
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -z "$LAST_TAG" ]; then
+            echo "::error::No prior tag exists. Run release-bootstrap.yml once before relying on auto-release."
+            exit 1
+          fi
+          RANGE="${LAST_TAG}..HEAD"
+          # feat: / feat(scope): / feat!: / feat(scope)!: → minor.
+          # Breaking changes are intentionally treated as minor — major bumps
+          # are off-policy for this repo until v1.0.
+          if git log "$RANGE" --format=%s | grep -qE '^feat(\([^)]+\))?!?:'; then
+            BUMP="minor"
+          else
+            BUMP="patch"
+          fi
+          echo "type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Bump type: $BUMP (range: $RANGE)"
+
+      - name: cargo release
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo release "${{ steps.bump.outputs.type }}" --execute --no-confirm
+
+      - name: Push commit and tag
+        run: git push --atomic --follow-tags origin main
+
+      - name: Read new crate version
+        id: version
+        run: |
+          VERSION=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.name=="anthropic-rs-sdk") | .version')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --title "v${VERSION}"

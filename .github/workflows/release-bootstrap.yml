@@ -1,0 +1,108 @@
+name: release-bootstrap
+
+# One-time workflow to ship the version currently in Cargo.toml (v0.1.0) before
+# the auto-release pipeline can take over. Asserts no tag exists yet so it
+# cannot be re-run by accident. After this runs once, future releases happen
+# automatically via release.yml on every merge to main.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  ANTHROPIC_API_KEY: ""
+
+jobs:
+  bootstrap:
+    name: bootstrap first release
+    runs-on: ubuntu-latest
+    environment: prod
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Guard — no tag may exist
+        run: |
+          if [ -n "$(git tag --list)" ]; then
+            echo "::error::Tags already exist. release-bootstrap.yml is single-use; use release.yml for subsequent releases."
+            git tag --list
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-bootstrap
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+
+      - name: Read crate version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.name=="anthropic-rs-sdk") | .version')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::Failed to read crate version from Cargo.toml"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bootstrapping v$VERSION"
+
+      # Sanity gate on the actual commit being shipped.
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --features 'rustls-tls,streaming,tools,bedrock,vertex' -- -D warnings
+
+      - name: cargo test
+        run: cargo test --locked --no-default-features --features rustls-tls,streaming,tools,bedrock,vertex
+
+      - name: cargo doc
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --features 'rustls-tls,streaming,tools,bedrock,vertex'
+
+      - name: cargo audit
+        run: cargo audit
+
+      - name: cargo deny check
+        run: cargo deny check
+
+      - name: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
+
+      - name: Configure git identity
+        run: |
+          git config user.name "Edinaldo Junior"
+          git config user.email "epsjunior@icloud.com"
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push origin "v${VERSION}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v${VERSION}" --generate-notes --title "v${VERSION}"
