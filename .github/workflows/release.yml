@@ -27,7 +27,8 @@ jobs:
     environment: prod
     timeout-minutes: 30
     # Skip the workflow's own release commit so it doesn't trigger itself.
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    # Scoped to bot-actor + prefix so a human writing `chore(release):` won't accidentally bypass.
+    if: ${{ !(github.actor == 'github-actions[bot]' && startsWith(github.event.head_commit.message, 'chore(release):')) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -38,8 +39,8 @@ jobs:
 
       - name: Configure git identity
         run: |
-          git config user.name "Edinaldo Junior"
-          git config user.email "epsjunior@icloud.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -73,6 +74,7 @@ jobs:
         run: cargo audit
 
       - name: cargo deny check
+        if: ${{ hashFiles('deny.toml') != '' }}
         run: cargo deny check
 
       - name: Determine bump type from Conventional Commits

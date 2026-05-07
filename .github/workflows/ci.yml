@@ -104,4 +104,5 @@ jobs:
         run: cargo audit
 
       - name: cargo deny check
+        if: ${{ hashFiles('deny.toml') != '' }}
         run: cargo deny check
