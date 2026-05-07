@@ -1,0 +1,32 @@
+# Cargo build output
+/target
+**/target/
+
+# Backup files Cargo or rustfmt may emit
+**/*.rs.bk
+Cargo.lock.bak
+
+# Coverage tooling output
+*.profraw
+*.profdata
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Local environment overrides — never commit secrets
+.env
+.env.*
+!.env.example
+.envrc
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db

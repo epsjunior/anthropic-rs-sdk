@@ -1,0 +1,57 @@
+[package]
+name = "anthropic-rs-sdk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+description = "Unofficial Rust SDK for the Anthropic API (community port of anthropic-sdk-go)"
+repository = "https://github.com/epsjunior/anthropic-rs-sdk"
+documentation = "https://docs.rs/anthropic-rs-sdk"
+readme = "README.md"
+keywords = ["anthropic", "claude", "ai", "llm", "sdk"]
+categories = ["api-bindings", "asynchronous"]
+
+[lib]
+name = "anthropic"
+path = "src/lib.rs"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+native-tls = ["reqwest/native-tls"]
+# Reserved for upcoming milestones — declared so feature gates compile cleanly as we ship them.
+streaming = []
+tools = []
+bedrock = []
+vertex = []
+# Gates integration tests that hit the real Anthropic API; off by default.
+live-tests = []
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "http2", "charset"] }
+tokio = { version = "1.40", features = ["rt", "macros", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2.5"
+bon = "3"
+http = "1"
+secrecy = "0.10"
+bytes = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full"] }
+pretty_assertions = "1"
+wiremock = "0.6"
+anyhow = "1"
+dotenvy = "0.15"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[example]]
+name = "basic_message"
+path = "examples/basic_message.rs"
+
+[[example]]
+name = "multi_turn"
+path = "examples/multi_turn.rs"
