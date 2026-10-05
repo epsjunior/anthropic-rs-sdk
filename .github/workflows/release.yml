@@ -30,7 +30,7 @@ jobs:
     # Scoped to bot-actor + prefix so a human writing `chore(release):` won't accidentally bypass.
     if: ${{ !(github.actor == 'github-actions[bot]' && startsWith(github.event.head_commit.message, 'chore(release):')) }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           # Default GITHUB_TOKEN works as long as `github-actions[bot]` is on
